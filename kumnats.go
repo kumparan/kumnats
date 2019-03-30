@@ -2,109 +2,118 @@ package kumnats
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	redigo "github.com/gomodule/redigo/redis"
 	"github.com/jasonlvhit/gocron"
-	log "github.com/sirupsen/logrus"
-
-	"github.com/kumparan/go-lib/utils"
 	stan "github.com/nats-io/go-nats-streaming"
 )
 
 type (
+	// NATS :nodoc:
+	NATS interface {
+		Publish(subject string, v interface{}) error
+		Subscribe(subject string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error)
+		QueueSubscribe(subject, queueGroup string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error)
+		Close() error
+	}
+
+	// Logger :nodoc:
+	Logger interface {
+		Error(args ...interface{})
+		Errorf(format string, args ...interface{})
+	}
 	// EventType :nodoc:
 	EventType string
 
 	// NatsCallback :nodoc:
-	NatsCallback func(conn *NATS)
+	NatsCallback func(conn NATS)
 
 	// NATS :nodoc:
-	NATS struct {
-		conn      stan.Conn
-		redisConn *redigo.Pool
-		testing   bool
+	natsImpl struct {
+		conn  stan.Conn
+		mutex *sync.RWMutex
 
 		stopCh      chan struct{}
 		reconnectCh chan struct{}
 		wg          *sync.WaitGroup
 
-		info              *natsInfo
-		reconnectInterval time.Duration
-		isWorkerRun       bool
-		workerLock        *sync.Mutex
-	}
+		info natsInfo
 
-	// NatsMessage :nodoc:
-	NatsMessage struct {
-		ID     int64     `json:"id"`
-		UserID int64     `json:"user_id"`
-		Type   EventType `json:"type"`
-		Body   string    `json:"body,omitempty"`
-		Time   string    `json:"time"`
-	}
+		workerStatus bool
+		workerLock   *sync.Mutex
 
-	NatsMessageWithSubject struct {
-		Subject string      `json:"subject"`
-		Message interface{} `json:"message"`
+		opts Options
 	}
 
 	// natsInfo contains informations that will be use to reconnecting to nats streaming
 	natsInfo struct {
-		clusterID string
-		clientID  string
-		url       string
-		opts      []stan.Option
-		callback  NatsCallback
+		url         string
+		clusterID   string
+		clientID    string
+		stanOptions []stan.Option
+		callback    NatsCallback
 	}
 )
 
-const (
-	failedMessagesRedisKey   = "nats:failed-messages"
-	defaultReconnectInterval = 500 * time.Millisecond
-)
+var defaultOptions = Options{
+	redisConn:                             nil,
+	failedMessagesRedisKey:                "nats:failed-messages",
+	reconnectInterval:                     500 * time.Millisecond,
+	failedMessagePublishIntervalInSeconds: 120,
+	logger:                                logrus.New(),
+}
 
 // NewNATSWithCallback IMPORTANT! Not to send any stan.NatsURL or stan.SetConnectionLostHandler as options
-func NewNATSWithCallback(clusterID, clientID, url string, fn NatsCallback, options ...stan.Option) {
-	nc := &NATS{
-		reconnectCh:       make(chan struct{}, 1),
-		stopCh:            make(chan struct{}),
-		wg:                new(sync.WaitGroup),
-		reconnectInterval: defaultReconnectInterval,
-		isWorkerRun:       false,
-		workerLock:        new(sync.Mutex),
+func NewNATSWithCallback(clusterID, clientID, url string, fn NatsCallback, stanOptions []stan.Option, options ...Option) (NATS, error) {
+	nc := &natsImpl{
+		reconnectCh:  make(chan struct{}, 1),
+		stopCh:       make(chan struct{}),
+		wg:           new(sync.WaitGroup),
+		workerStatus: false,
+		workerLock:   new(sync.Mutex),
+		opts:         defaultOptions,
+		mutex:        new(sync.RWMutex),
 	}
 
-	options = append(options, stan.SetConnectionLostHandler(func(conn stan.Conn, reason error) {
-		log.Errorf("Nats connection lost! Reason: %v", reason)
-		nc.reconnectCh <- struct{}{}
+	for _, opts := range options {
+		if err := opts(&nc.opts); err != nil {
+			return nil, err
+		}
+	}
+
+	stanOptions = append(stanOptions, stan.SetConnectionLostHandler(func(conn stan.Conn, reason error) {
+		select {
+		case <-nc.stopCh:
+			return
+		case nc.reconnectCh <- struct{}{}:
+
+		}
 	}))
 
-	nc.info = &natsInfo{
-		url:       url,
-		clusterID: clusterID,
-		clientID:  clientID,
-		callback:  fn,
-		opts:      options,
+	nc.info = natsInfo{
+		url:         url,
+		clusterID:   clusterID,
+		clientID:    clientID,
+		callback:    fn,
+		stanOptions: stanOptions,
 	}
 
-	conn, err := connect(clusterID, clientID, url, options...)
+	conn, err := connect(clusterID, clientID, url, stanOptions...)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"clusterID": clusterID,
-			"clientID":  clientID,
-		}).Fatal(err)
+		return nil, err
 	}
 
-	log.WithFields(log.Fields{
-		"clusterID": clusterID,
-		"clientID":  clientID,
-	}).Info("Nats connection made...")
-
-	nc.SetConn(conn)
+	nc.setConn(conn)
 	// Run callback function
 	nc.runCallback()
+	nc.run()
+
+	return nc, nil
 }
 
 // connect to nats streaming
@@ -117,54 +126,26 @@ func connect(clusterID, clientID, url string, options ...stan.Option) (stan.Conn
 	return nc, nil
 }
 
-// NewTestNATS :nodoc:
-func NewTestNATS() *NATS {
-	return &NATS{testing: true}
-}
-
-// SetConn :nodoc:
-func (n *NATS) SetConn(conn stan.Conn) {
+func (n *natsImpl) setConn(conn stan.Conn) {
+	n.mutex.Lock()
 	n.conn = conn
+	n.mutex.Unlock()
 }
 
-// SetRedisConn :nodoc:
-func (n *NATS) SetRedisConn(conn *redigo.Pool) {
-	n.redisConn = conn
-}
-
-// SetReconnectInterval :nodoc:
-func (n *NATS) SetReconnectInterval(d time.Duration) {
-	n.reconnectInterval = d
-}
-
-// Close NatsConnection :nodoc:
-func (n *NATS) Close() error {
-	close(n.stopCh)
-	n.wg.Wait()
-	close(n.reconnectCh)
-
-	if n.conn != nil {
-		err := n.conn.Close()
-		if err != nil {
-			return err
-		}
+func (n *natsImpl) checkConnIsValid() (b bool) {
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+	if n.conn.NatsConn() != nil && n.conn.NatsConn().IsConnected() {
+		return true
 	}
-
-	if n.redisConn != nil {
-		err := n.redisConn.Close()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return false
 }
 
 // Run :nodoc:
-func (n *NATS) Run() {
-	if n.redisConn != nil {
+func (n *natsImpl) run() {
+	if n.opts.redisConn != nil {
 		s := gocron.NewScheduler()
-		s.Every(1).Minutes().Do(n.publishFromRedis)
+		s.Every(n.opts.failedMessagePublishIntervalInSeconds).Seconds().Do(n.publishFailedMessageFromRedis)
 
 		n.wg.Add(1)
 		go func() {
@@ -181,94 +162,118 @@ func (n *NATS) Run() {
 	go n.reconnectWorker()
 }
 
-// Publish :nodoc:
-func (n *NATS) Publish(subject string, v interface{}) error {
-	if n.testing {
-		return nil
+// Close NatsConnection :nodoc:
+func (n *natsImpl) Close() error {
+	close(n.stopCh)
+	n.wg.Wait()
+
+	if n.checkConnIsValid() {
+		err := n.conn.Close()
+		if err != nil {
+			return err
+		}
 	}
 
-	if n.conn != nil {
-		err := n.conn.Publish(subject, utils.ToByte(v))
+	if n.opts.redisConn != nil {
+		err := n.opts.redisConn.Close()
+		if err != nil {
+			return err
+		}
+	}
+	close(n.reconnectCh)
+
+	return nil
+}
+
+// Publish :nodoc:
+func (n *natsImpl) Publish(subject string, v interface{}) (err error) {
+	if n.checkConnIsValid() {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		err = n.conn.Publish(subject, b)
 		if err == nil {
 			return nil
 		}
 	}
 
-	// Push to redis if failed
-	if n.redisConn != nil {
-		client := n.redisConn.Get()
-		defer client.Close()
-		i, err := redigo.Int(client.Do("RPUSH", failedMessagesRedisKey, utils.ToByte(NatsMessageWithSubject{
-			Subject: subject,
-			Message: v,
-		})))
+	if n.opts.redisConn == nil {
 		if err != nil {
-			log.WithFields(log.Fields{
-				"subject": subject,
-				"msg":     utils.ToByte(v),
-			}).Error(err)
+			return err
+		} else {
+			return errors.New("failed publish to nats streaming")
 		}
-
-		if i%100 == 0 {
-			log.Errorf("total message that handled by redis : %+v", i)
-		}
-	} else {
-		log.Fatal("publish to nats failed and no redis conection available to handle it")
 	}
+
+	// Push to redis if failed
+	client := n.opts.redisConn.Get()
+	defer client.Close()
+	b, err := json.Marshal(&natsMessageWithSubject{
+		Subject: subject,
+		Message: v,
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = redigo.Int(client.Do("RPUSH", n.opts.failedMessagesRedisKey, b))
+	if err != nil {
+		n.opts.logger.Error("failed to RPUSH to redis. redis connection problem")
+		return err
+	}
+
 	return nil
 }
 
 // QueueSubscribe :nodoc:
-func (n *NATS) QueueSubscribe(subject, qgroup string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error) {
-	if n.testing {
-		return nil, nil
-	}
-
+func (n *natsImpl) QueueSubscribe(subject, qgroup string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error) {
 	return n.conn.QueueSubscribe(subject, qgroup, cb, opts...)
 }
 
 // Subscribe :nodoc:
-func (n *NATS) Subscribe(subject string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error) {
-	if n.testing {
-		return nil, nil
-	}
+func (n *natsImpl) Subscribe(subject string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error) {
 	return n.conn.Subscribe(subject, cb, opts...)
 }
 
-func (n *NATS) runCallback() {
-	if n.info != nil && n.info.callback != nil {
+func (n *natsImpl) runCallback() {
+	if n.info.callback != nil {
 		n.info.callback(n)
 	}
 }
 
-func (n *NATS) publishFromRedis() {
-	log.Info("running publish from redis...")
+func (n *natsImpl) checkWorkerStatus() bool {
 	n.workerLock.Lock()
-	if n.isWorkerRun {
-		n.workerLock.Unlock()
-		return
-	}
-	n.isWorkerRun = true
 	n.workerLock.Unlock()
+	return n.workerStatus
+}
 
-	defer func() {
-		n.workerLock.Lock()
-		n.isWorkerRun = false
-		n.workerLock.Unlock()
-	}()
+func (n *natsImpl) setWorkerStatus(b bool) {
+	n.workerLock.Lock()
+	n.workerStatus = b
+	n.workerLock.Unlock()
+}
 
-	if n.conn == nil {
-		log.Error("abort due to connection problem")
+func (n *natsImpl) publishFailedMessageFromRedis() {
+	isRun := n.checkWorkerStatus()
+	if isRun {
+		return
+	}
+	n.setWorkerStatus(true)
+	defer n.setWorkerStatus(false)
+
+	if !n.checkConnIsValid() {
+		n.opts.logger.Error("abort due to connection problem")
 		return
 	}
 
-	client := n.redisConn.Get()
+	client := n.opts.redisConn.Get()
 	defer client.Close()
 
 	for {
-		b, err := redigo.Bytes(client.Do("LPOP", failedMessagesRedisKey))
+		b, err := redigo.Bytes(client.Do("LPOP", n.opts.failedMessagesRedisKey))
 		if err != nil && err != redigo.ErrNil {
-			log.Error(err)
+			n.opts.logger.Error("failed to LPOP from redis. redis connection problem")
 			return
 		}
 
@@ -276,45 +281,57 @@ func (n *NATS) publishFromRedis() {
 			return
 		}
 
-		msg := new(NatsMessageWithSubject)
+		msg := new(natsMessageWithSubject)
 		err = json.Unmarshal(b, msg)
 		if err == nil {
-			if n.conn != nil {
-				err = n.conn.Publish(msg.Subject, utils.ToByte(msg.Message))
+			if n.checkConnIsValid() {
+				b, err := json.Marshal(msg.Message)
+				if err != nil {
+					return
+				}
+				err = n.conn.Publish(msg.Subject, b)
 				if err == nil {
 					continue
 				}
 			}
 		}
 
-		client.Do("LPUSH", failedMessagesRedisKey, b)
+		_, err = client.Do("LPUSH", n.opts.failedMessagesRedisKey, b)
+		if err != nil {
+			n.opts.logger.Error("failed to LPUSH to redis. redis connection problem")
+			return
+		}
 		if err == stan.ErrConnectionClosed {
-			log.Error("abort due to connection problem")
+			n.opts.logger.Error("abort due to connection problem")
 			return
 		}
 	}
 }
 
-func (n *NATS) reconnectWorker() {
+func (n *natsImpl) reconnectWorker() {
 	defer n.wg.Done()
 	for {
 		select {
 		case <-n.stopCh:
 			return
 		case <-n.reconnectCh:
-			conn, err := connect(n.info.clusterID, n.info.clientID, n.info.url, n.info.opts...)
-			if err != nil {
-				log.Error("failed to reconnect")
-				time.Sleep(n.reconnectInterval)
-
-				// send to channel safely
-				select {
-				case n.reconnectCh <- struct{}{}:
-				}
+			if n.checkConnIsValid() {
 				continue
 			}
-			n.SetConn(conn)
-			n.runCallback()
+			conn, err := connect(n.info.clusterID, n.info.clientID, n.info.url, n.info.stanOptions...)
+			if err == nil {
+				n.setConn(conn)
+				n.runCallback()
+				continue
+			}
+			n.opts.logger.Error("failed to reconnect")
+			time.Sleep(n.opts.reconnectInterval)
+
+			select {
+			case n.reconnectCh <- struct{}{}:
+			case <-n.stopCh:
+				return
+			}
 		}
 	}
 }
