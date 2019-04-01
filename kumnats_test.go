@@ -1,11 +1,16 @@
 package kumnats
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis"
+	redigo "github.com/gomodule/redigo/redis"
 	natsServer "github.com/nats-io/gnatsd/server"
 	stan "github.com/nats-io/go-nats-streaming"
 	"github.com/nats-io/nats-streaming-server/server"
@@ -30,8 +35,35 @@ func runServer(clusterName string, port int) *server.StanServer {
 	return s
 }
 
+func captureOutput(f func()) string {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	f()
+	log.SetOutput(os.Stderr)
+	return buf.String()
+}
+
 func runAnotherServer(port int) *server.StanServer {
 	return runServer(clusterName, port)
+}
+
+func newRedisConn(url string) *redigo.Pool {
+	return &redigo.Pool{
+		MaxIdle:     100,
+		MaxActive:   10000,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redigo.Conn, error) {
+			c, err := redigo.Dial("tcp", url)
+			if err != nil {
+				return nil, err
+			}
+			return c, err
+		},
+		TestOnBorrow: func(c redigo.Conn, t time.Time) error {
+			_, err := c.Do("PING")
+			return err
+		},
+	}
 }
 
 func TestMain(t *testing.M) {
@@ -85,12 +117,57 @@ func TestSubscribe(t *testing.T) {
 	sub.Unsubscribe()
 }
 
-func TestQueueSubscribe(t *testing.T) {
-	t.Log("not yet")
-}
-
 func TestPublishFailedAndSaveToRedis(t *testing.T) {
-	t.Log("not yet")
+	port := 21111
+	server := runAnotherServer(port)
+	defer server.Shutdown()
+
+	m, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	r := newRedisConn(m.Addr())
+	conn, err := NewNATSWithCallback(
+		clusterName,
+		clientName,
+		fmt.Sprintf("localhost:%d", port),
+		nil,
+		nil,
+		WithReconnectInterval(10*time.Millisecond),
+		WithRedis(r),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	server.Shutdown()
+
+	type msg struct {
+		Data string `json:"data"`
+	}
+
+	ms := &msg{
+		Data: "test",
+	}
+	err = conn.Publish("test", ms)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rClient := r.Get()
+	defer rClient.Close()
+
+	b, err := redigo.Bytes(rClient.Do("LPOP", defaultOptions.failedMessagesRedisKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(b), "test") {
+		t.Fatal("string bytes should contain message value")
+	}
 }
 
 func TestReconnectAfterLostConnection(t *testing.T) {
@@ -184,5 +261,70 @@ func TestSubscribeAfterLostConnection(t *testing.T) {
 }
 
 func TestRunningWorkerAfterLostConnection(t *testing.T) {
-	t.Log("not yet")
+	port := 24444
+	server := runAnotherServer(port)
+	defer server.Shutdown()
+
+	m, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	r := newRedisConn(m.Addr())
+	conn, err := NewNATSWithCallback(
+		clusterName,
+		clientName,
+		fmt.Sprintf("localhost:%d", port),
+		nil,
+		nil,
+		WithReconnectInterval(10*time.Millisecond),
+		WithRedis(r),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	server.Shutdown()
+
+	type msg struct {
+		Data string `json:"data"`
+	}
+
+	ms := &msg{
+		Data: "test",
+	}
+	err = conn.Publish("test", ms)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	v, ok := conn.(*natsImpl)
+	if !ok {
+		t.Fatal("failed on type assertion")
+	}
+
+	if v.checkConnIsValid() {
+		t.Fatal("should be not valid")
+	}
+
+	server = runAnotherServer(port)
+	defer server.Shutdown()
+
+	time.Sleep(6 * time.Second) // wait for making connection
+
+	if !v.checkConnIsValid() {
+		t.Fatal("should be valid")
+	}
+
+	ch := make(chan struct{}, 1)
+	output := captureOutput(func() {
+		v.publishFailedMessageFromRedis()
+		ch <- struct{}{}
+	})
+	<-ch
+	if strings.Contains(output, "abort due to connection problem") {
+		t.Fatal("worker should work properly")
+	}
 }

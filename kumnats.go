@@ -257,6 +257,7 @@ func (n *natsImpl) setWorkerStatus(b bool) {
 func (n *natsImpl) publishFailedMessageFromRedis() {
 	isRun := n.checkWorkerStatus()
 	if isRun {
+		n.opts.logger.Error("worker is already running")
 		return
 	}
 	n.setWorkerStatus(true)
@@ -287,6 +288,7 @@ func (n *natsImpl) publishFailedMessageFromRedis() {
 			if n.checkConnIsValid() {
 				b, err := json.Marshal(msg.Message)
 				if err != nil {
+					n.opts.logger.Error("error marshaling data")
 					return
 				}
 				err = n.conn.Publish(msg.Subject, b)

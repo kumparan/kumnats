@@ -3,6 +3,8 @@ module github.com/kumparan/kumnats
 go 1.12
 
 require (
+	github.com/alicebob/gopher-json v0.0.0-20180125190556-5a6b3ba71ee6 // indirect
+	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/go-sql-driver/mysql v1.4.1 // indirect
@@ -22,6 +24,7 @@ require (
 	github.com/nats-io/nuid v1.0.0 // indirect
 	github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c // indirect
 	github.com/sirupsen/logrus v1.4.0
+	github.com/yuin/gopher-lua v0.0.0-20190206043414-8bfc7677f583 // indirect
 	golang.org/x/net v0.0.0-20181201002055-351d144fa1fc // indirect
 	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f // indirect
 	google.golang.org/appengine v1.3.0 // indirect
