@@ -2,6 +2,7 @@ package kumnats
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/alicebob/miniredis"
 	redigo "github.com/gomodule/redigo/redis"
+	"github.com/kumparan/tapao"
 	natsServer "github.com/nats-io/gnatsd/server"
 	stan "github.com/nats-io/go-nats-streaming"
 	"github.com/nats-io/nats-streaming-server/server"
@@ -80,7 +82,7 @@ func TestPublish(t *testing.T) {
 	}
 	defer n.Close()
 
-	err = n.Publish("test-channel", "test")
+	err = n.Publish("test-channel", []byte("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +98,7 @@ func TestSubscribe(t *testing.T) {
 	subject := "test-channel"
 
 	countMsg := 10
-	recieveCh := make(chan interface{}, countMsg)
+	recieveCh := make(chan []byte, countMsg)
 	sub, err := n.Subscribe(subject, func(msg *stan.Msg) {
 		recieveCh <- msg.Data
 	})
@@ -104,15 +106,34 @@ func TestSubscribe(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	type msg struct {
+		Data int64 `json:"data"`
+	}
+
 	for i := 0; i < countMsg; i++ {
-		err = n.Publish(subject, "test")
+		ms := &msg{
+			Data: int64(1554775372665126857),
+		}
+		msgBytes, err := tapao.Marshal(ms)
 		if err != nil {
 			t.Fatal(err)
 		}
-
+		err = n.Publish(subject, msgBytes)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	for i := 0; i < countMsg; i++ {
-		<-recieveCh
+		b := <-recieveCh
+		msg := new(msg)
+		err = tapao.Unmarshal(b, msg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if msg.Data != int64(1554775372665126857) {
+			t.Fatal("error")
+		}
+
 	}
 	sub.Unsubscribe()
 }
@@ -152,7 +173,11 @@ func TestPublishFailedAndSaveToRedis(t *testing.T) {
 	ms := &msg{
 		Data: "test",
 	}
-	err = conn.Publish("test", ms)
+	msgBytes, err := json.Marshal(ms)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.Publish("test", msgBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +252,7 @@ func TestSubscribeAfterLostConnection(t *testing.T) {
 	}
 	defer conn.Close()
 
-	err = conn.Publish(subject, "test")
+	err = conn.Publish(subject, []byte("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +277,7 @@ func TestSubscribeAfterLostConnection(t *testing.T) {
 	if !v.checkConnIsValid() {
 		t.Fatal("should be valid")
 	}
-	err = conn.Publish(subject, "test")
+	err = conn.Publish(subject, []byte("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +320,11 @@ func TestRunningWorkerAfterLostConnection(t *testing.T) {
 	ms := &msg{
 		Data: "test",
 	}
-	err = conn.Publish("test", ms)
+	msgBytes, err := json.Marshal(ms)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.Publish("test", msgBytes)
 	if err != nil {
 		t.Fatal(err)
 	}

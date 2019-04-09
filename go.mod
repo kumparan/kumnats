@@ -15,6 +15,7 @@ require (
 	github.com/hashicorp/go-msgpack v0.0.0-20150518234257-fa3f63826f7c // indirect
 	github.com/hashicorp/raft v1.0.0 // indirect
 	github.com/jasonlvhit/gocron v0.0.0-20190327062825-f5de5d9d4fcd
+	github.com/kumparan/tapao v1.0.0
 	github.com/lib/pq v1.0.0 // indirect
 	github.com/nats-io/gnatsd v1.3.0
 	github.com/nats-io/go-nats v1.7.0 // indirect
@@ -26,8 +27,5 @@ require (
 	github.com/sirupsen/logrus v1.4.0
 	github.com/yuin/gopher-lua v0.0.0-20190206043414-8bfc7677f583 // indirect
 	golang.org/x/net v0.0.0-20181201002055-351d144fa1fc // indirect
-	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f // indirect
-	google.golang.org/appengine v1.3.0 // indirect
-	gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 // indirect
 	gopkg.in/vmihailenco/msgpack.v2 v2.9.1 // indirect
 )
