@@ -12,6 +12,7 @@ import (
 
 	"github.com/alicebob/miniredis"
 	redigo "github.com/gomodule/redigo/redis"
+	"github.com/kumparan/tapao"
 	natsServer "github.com/nats-io/gnatsd/server"
 	stan "github.com/nats-io/go-nats-streaming"
 	"github.com/nats-io/nats-streaming-server/server"
@@ -113,7 +114,7 @@ func TestSubscribe(t *testing.T) {
 		ms := &msg{
 			Data: int64(1554775372665126857),
 		}
-		msgBytes, err := json.Marshal(ms)
+		msgBytes, err := tapao.Marshal(ms)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -125,7 +126,7 @@ func TestSubscribe(t *testing.T) {
 	for i := 0; i < countMsg; i++ {
 		b := <-recieveCh
 		msg := new(msg)
-		err = json.Unmarshal(b, msg)
+		err = tapao.Unmarshal(b, msg)
 		if err != nil {
 			t.Fatal(err)
 		}
