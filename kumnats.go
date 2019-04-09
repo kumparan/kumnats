@@ -208,7 +208,7 @@ func (n *natsImpl) Publish(subject string, v []byte) (err error) {
 	b, err := tapao.Marshal(&natsMessageWithSubject{
 		Subject: subject,
 		Message: v,
-	}, tapao.FallbackWith(tapao.JSON))
+	})
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func (n *natsImpl) publishFailedMessageFromRedis() {
 		}
 
 		msg := new(natsMessageWithSubject)
-		err = tapao.Unmarshal(b, msg, tapao.FallbackWith(tapao.JSON))
+		err = tapao.Unmarshal(b, &msg, tapao.FallbackWith(tapao.JSON))
 		if err == nil {
 			if n.checkConnIsValid() {
 				err = n.conn.Publish(msg.Subject, msg.Message)
