@@ -11,7 +11,7 @@ type (
 	}
 
 	natsMessageWithSubject struct {
-		Subject string      `json:"subject"`
-		Message interface{} `json:"message"`
+		Subject string `json:"subject"`
+		Message []byte `json:"message"`
 	}
 )

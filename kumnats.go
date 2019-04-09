@@ -1,7 +1,6 @@
 package kumnats
 
 import (
-	"encoding/json"
 	"errors"
 	"sync"
 	"time"
@@ -10,13 +9,14 @@ import (
 
 	redigo "github.com/gomodule/redigo/redis"
 	"github.com/jasonlvhit/gocron"
+	"github.com/kumparan/tapao"
 	stan "github.com/nats-io/go-nats-streaming"
 )
 
 type (
 	// NATS :nodoc:
 	NATS interface {
-		Publish(subject string, v interface{}) error
+		Publish(subject string, value []byte) error
 		Subscribe(subject string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error)
 		QueueSubscribe(subject, queueGroup string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error)
 		Close() error
@@ -186,13 +186,9 @@ func (n *natsImpl) Close() error {
 }
 
 // Publish :nodoc:
-func (n *natsImpl) Publish(subject string, v interface{}) (err error) {
+func (n *natsImpl) Publish(subject string, v []byte) (err error) {
 	if n.checkConnIsValid() {
-		b, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-		err = n.conn.Publish(subject, b)
+		err = n.conn.Publish(subject, v)
 		if err == nil {
 			return nil
 		}
@@ -209,10 +205,10 @@ func (n *natsImpl) Publish(subject string, v interface{}) (err error) {
 	// Push to redis if failed
 	client := n.opts.redisConn.Get()
 	defer client.Close()
-	b, err := json.Marshal(&natsMessageWithSubject{
+	b, err := tapao.Marshal(&natsMessageWithSubject{
 		Subject: subject,
 		Message: v,
-	})
+	}, tapao.FallbackWith(tapao.JSON))
 	if err != nil {
 		return err
 	}
@@ -283,15 +279,10 @@ func (n *natsImpl) publishFailedMessageFromRedis() {
 		}
 
 		msg := new(natsMessageWithSubject)
-		err = json.Unmarshal(b, msg)
+		err = tapao.Unmarshal(b, msg, tapao.FallbackWith(tapao.JSON))
 		if err == nil {
 			if n.checkConnIsValid() {
-				b, err := json.Marshal(msg.Message)
-				if err != nil {
-					n.opts.logger.Error("error marshaling data")
-					return
-				}
-				err = n.conn.Publish(msg.Subject, b)
+				err = n.conn.Publish(msg.Subject, msg.Message)
 				if err == nil {
 					continue
 				}

@@ -46,7 +46,7 @@ func (mr *MockNATSMockRecorder) Close() *gomock.Call {
 }
 
 // Publish mocks base method
-func (m *MockNATS) Publish(arg0 string, arg1 interface{}) error {
+func (m *MockNATS) Publish(arg0 string, arg1 []byte) error {
 	ret := m.ctrl.Call(m, "Publish", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
