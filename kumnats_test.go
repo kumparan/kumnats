@@ -88,6 +88,19 @@ func TestPublish(t *testing.T) {
 	}
 }
 
+func TestDirectPublish(t *testing.T) {
+	n, err := NewNATSWithCallback(clusterName, clientName, defaultURL, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.Close()
+
+	err = n.DirectPublish("test-channel", []byte("test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSubscribe(t *testing.T) {
 	n, err := NewNATSWithCallback(clusterName, clientName, defaultURL, nil, nil)
 	if err != nil {

@@ -45,6 +45,18 @@ func (mr *MockNATSMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockNATS)(nil).Close))
 }
 
+// DirectPublish mocks base method
+func (m *MockNATS) DirectPublish(arg0 string, arg1 []byte) error {
+	ret := m.ctrl.Call(m, "DirectPublish", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DirectPublish indicates an expected call of DirectPublish
+func (mr *MockNATSMockRecorder) DirectPublish(arg0, arg1 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DirectPublish", reflect.TypeOf((*MockNATS)(nil).DirectPublish), arg0, arg1)
+}
+
 // Publish mocks base method
 func (m *MockNATS) Publish(arg0 string, arg1 []byte) error {
 	ret := m.ctrl.Call(m, "Publish", arg0, arg1)

@@ -17,6 +17,7 @@ type (
 	// NATS :nodoc:
 	NATS interface {
 		Publish(subject string, value []byte) error
+		DirectPublish(subject string, value []byte) error
 		Subscribe(subject string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error)
 		QueueSubscribe(subject, queueGroup string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error)
 		Close() error
@@ -183,6 +184,11 @@ func (n *natsImpl) Close() error {
 	close(n.reconnectCh)
 
 	return nil
+}
+
+// DirectPublish :nodoc:
+func (n *natsImpl) DirectPublish(subject string, value []byte) error {
+	return n.conn.Publish(subject, value)
 }
 
 // Publish :nodoc:
