@@ -188,7 +188,10 @@ func (n *natsImpl) Close() error {
 
 // DirectPublish :nodoc:
 func (n *natsImpl) DirectPublish(subject string, value []byte) error {
-	return n.conn.Publish(subject, value)
+	if n.checkConnIsValid() {
+		return n.conn.Publish(subject, value)
+	}
+	return errors.New("connection error")
 }
 
 // Publish :nodoc:
