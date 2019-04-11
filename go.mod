@@ -1,4 +1,4 @@
-module github.com/kumparan/kumnats
+module github.com/kumparan/kumnats/v2
 
 go 1.12
 
