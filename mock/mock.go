@@ -75,6 +75,18 @@ func (mr *MockNATSMockRecorder) QueueSubscribe(arg0, arg1, arg2 interface{}, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueueSubscribe", reflect.TypeOf((*MockNATS)(nil).QueueSubscribe), varargs...)
 }
 
+// SafePublish mocks base method
+func (m *MockNATS) SafePublish(arg0 string, arg1 []byte) error {
+	ret := m.ctrl.Call(m, "SafePublish", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SafePublish indicates an expected call of SafePublish
+func (mr *MockNATSMockRecorder) SafePublish(arg0, arg1 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SafePublish", reflect.TypeOf((*MockNATS)(nil).SafePublish), arg0, arg1)
+}
+
 // Subscribe mocks base method
 func (m *MockNATS) Subscribe(arg0 string, arg1 go_nats_streaming.MsgHandler, arg2 ...go_nats_streaming.SubscriptionOption) (go_nats_streaming.Subscription, error) {
 	varargs := []interface{}{arg0, arg1}

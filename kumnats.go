@@ -17,6 +17,7 @@ type (
 	// NATS :nodoc:
 	NATS interface {
 		Publish(subject string, value []byte) error
+		SafePublish(subject string, value []byte) error
 		Subscribe(subject string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error)
 		QueueSubscribe(subject, queueGroup string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error)
 		Close() error
@@ -186,7 +187,15 @@ func (n *natsImpl) Close() error {
 }
 
 // Publish :nodoc:
-func (n *natsImpl) Publish(subject string, v []byte) (err error) {
+func (n *natsImpl) Publish(subject string, value []byte) error {
+	if n.checkConnIsValid() {
+		return n.conn.Publish(subject, value)
+	}
+	return errors.New("connection error")
+}
+
+// SafePublish :nodoc:
+func (n *natsImpl) SafePublish(subject string, v []byte) (err error) {
 	if n.checkConnIsValid() {
 		err = n.conn.Publish(subject, v)
 		if err == nil {
