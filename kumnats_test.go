@@ -75,6 +75,19 @@ func TestMain(t *testing.M) {
 	os.Exit(m)
 }
 
+func TestSafePublish(t *testing.T) {
+	n, err := NewNATSWithCallback(clusterName, clientName, defaultURL, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.Close()
+
+	err = n.SafePublish("test-channel", []byte("test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPublish(t *testing.T) {
 	n, err := NewNATSWithCallback(clusterName, clientName, defaultURL, nil, nil)
 	if err != nil {
@@ -177,7 +190,7 @@ func TestPublishFailedAndSaveToRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = conn.Publish("test", msgBytes)
+	err = conn.SafePublish("test", msgBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +265,7 @@ func TestSubscribeAfterLostConnection(t *testing.T) {
 	}
 	defer conn.Close()
 
-	err = conn.Publish(subject, []byte("test"))
+	err = conn.SafePublish(subject, []byte("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +290,7 @@ func TestSubscribeAfterLostConnection(t *testing.T) {
 	if !v.checkConnIsValid() {
 		t.Fatal("should be valid")
 	}
-	err = conn.Publish(subject, []byte("test"))
+	err = conn.SafePublish(subject, []byte("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +337,7 @@ func TestRunningWorkerAfterLostConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = conn.Publish("test", msgBytes)
+	err = conn.SafePublish("test", msgBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
