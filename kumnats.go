@@ -64,6 +64,7 @@ type (
 var defaultOptions = Options{
 	redisConn:                             nil,
 	failedMessagesRedisKey:                "nats:failed-messages",
+	deadMessagesRedisKey:                  "nats:dead-messages",
 	reconnectInterval:                     500 * time.Millisecond,
 	failedMessagePublishIntervalInSeconds: 120,
 	logger:                                logrus.New(),
@@ -298,13 +299,16 @@ func (n *natsImpl) publishFailedMessageFromRedis() {
 			}
 		}
 
-		_, err = client.Do("LPUSH", n.opts.failedMessagesRedisKey, b)
 		if err != nil {
+			n.opts.logger.Error("Error : ", err)
+		}
+
+		_, errRedis := client.Do("LPUSH", n.opts.deadMessagesRedisKey, b)
+		if errRedis != nil {
 			n.opts.logger.Error("failed to LPUSH to redis. redis connection problem")
 			return
 		}
 		if err == stan.ErrConnectionClosed {
-			n.opts.logger.Error("abort due to connection problem")
 			return
 		}
 	}
