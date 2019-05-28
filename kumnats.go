@@ -269,11 +269,6 @@ func (n *natsImpl) publishFailedMessageFromRedis() {
 	n.setWorkerStatus(true)
 	defer n.setWorkerStatus(false)
 
-	if !n.checkConnIsValid() {
-		n.opts.logger.Error("abort due to connection problem")
-		return
-	}
-
 	client := n.opts.redisConn.Get()
 	defer client.Close()
 
