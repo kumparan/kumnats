@@ -285,7 +285,7 @@ func TestSubscribeAfterLostConnection(t *testing.T) {
 	close(recieveCh)
 }
 
-func TestRunningWorkerAfterLostConnection(t *testing.T) {
+func TestRunningWorkerAfterLostConnection_Success(t *testing.T) {
 	port := 24444
 	server := runAnotherServer(port)
 	defer server.Shutdown()
@@ -338,22 +338,140 @@ func TestRunningWorkerAfterLostConnection(t *testing.T) {
 		t.Fatal("should be not valid")
 	}
 
+	redisConn := v.opts.redisConn.Get()
+	defer redisConn.Close()
+
+	i, err := redigo.Int(redisConn.Do("llen", v.opts.failedMessagesRedisKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if i != 1 {
+		t.Fatal("Length of failed-message should be 1")
+	}
+
 	server = runAnotherServer(port)
 	defer server.Shutdown()
 
-	time.Sleep(6 * time.Second) // wait for making connection
+	time.Sleep(10 * time.Second) // wait for making connection
 
 	if !v.checkConnIsValid() {
 		t.Fatal("should be valid")
 	}
 
 	ch := make(chan struct{}, 1)
-	output := captureOutput(func() {
+	_ = captureOutput(func() {
 		v.publishFailedMessageFromRedis()
 		ch <- struct{}{}
 	})
 	<-ch
-	if strings.Contains(output, "abort due to connection problem") {
-		t.Fatal("worker should work properly")
+
+	i, err = redigo.Int(redisConn.Do("llen", v.opts.failedMessagesRedisKey))
+	if err != nil {
+		t.Log(err)
+	}
+
+	if i != 0 {
+		t.Fatal("failed message key should be empty")
+	}
+
+	i, err = redigo.Int(redisConn.Do("llen", v.opts.deadMessagesRedisKey))
+	if err != nil {
+		t.Log(err)
+	}
+
+	if i != 0 {
+		t.Fatal("dead messages key should be 0")
+	}
+}
+
+func TestRunningWorkerAfterLostConnection_Failed(t *testing.T) {
+	port := 24444
+	server := runAnotherServer(port)
+	defer server.Shutdown()
+
+	m, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	r := newRedisConn(m.Addr())
+	conn, err := NewNATSWithCallback(
+		clusterName,
+		clientName,
+		fmt.Sprintf("localhost:%d", port),
+		nil,
+		nil,
+		WithReconnectInterval(10*time.Millisecond),
+		WithRedis(r),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	server.Shutdown()
+
+	type msg struct {
+		Data string `json:"data"`
+	}
+
+	ms := &msg{
+		Data: "test",
+	}
+	msgBytes, err := json.Marshal(ms)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.Publish("test", msgBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	v, ok := conn.(*natsImpl)
+	if !ok {
+		t.Fatal("failed on type assertion")
+	}
+
+	if v.checkConnIsValid() {
+		t.Fatal("should be not valid")
+	}
+
+	redisConn := v.opts.redisConn.Get()
+	defer redisConn.Close()
+
+	i, err := redigo.Int(redisConn.Do("llen", v.opts.failedMessagesRedisKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if i != 1 {
+		t.Fatal("Length of failed-message should be 1")
+	}
+
+	ch := make(chan struct{}, 1)
+	_ = captureOutput(func() {
+		v.publishFailedMessageFromRedis()
+		ch <- struct{}{}
+	})
+	<-ch
+
+	i, err = redigo.Int(redisConn.Do("llen", v.opts.failedMessagesRedisKey))
+	if err != nil {
+		t.Log(err)
+	}
+
+	if i > 0 {
+		t.Fatal("failed message key should be empty")
+	}
+
+	i, err = redigo.Int(redisConn.Do("llen", v.opts.deadMessagesRedisKey))
+	if err != nil {
+		t.Log(err)
+	}
+
+	if i != 1 {
+		t.Fatal("dead messages key should be 1")
 	}
 }
