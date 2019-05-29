@@ -300,7 +300,7 @@ func (n *natsImpl) publishFailedMessageFromRedis() {
 
 		_, errRedis := client.Do("RPUSH", n.opts.deadMessagesRedisKey, b)
 		if errRedis != nil {
-			n.opts.logger.Error("failed to LPUSH to redis. redis connection problem")
+			n.opts.logger.Error("failed to RPUSH to dead messages key. redis connection problem")
 			return
 		}
 		if err == stan.ErrConnectionClosed {
