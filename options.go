@@ -11,6 +11,7 @@ type Option func(*Options) error
 type Options struct {
 	redisConn                             *redigo.Pool
 	failedMessagesRedisKey                string
+	deadMessagesRedisKey                  string
 	reconnectInterval                     time.Duration
 	failedMessagePublishIntervalInSeconds uint64
 	logger                                Logger
@@ -26,6 +27,13 @@ func WithRedis(conn *redigo.Pool) Option {
 func WithFailedMessageRedisKey(key string) Option {
 	return func(opt *Options) error {
 		opt.failedMessagesRedisKey = key
+		return nil
+	}
+}
+
+func WithDeadMessageRedisKey(key string) Option {
+	return func(opt *Options) error {
+		opt.deadMessagesRedisKey = key
 		return nil
 	}
 }
