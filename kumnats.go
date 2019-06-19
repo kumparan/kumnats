@@ -198,9 +198,8 @@ func (n *natsImpl) Publish(subject string, v []byte) (err error) {
 	if n.opts.redisConn == nil {
 		if err != nil {
 			return err
-		} else {
-			return errors.New("failed publish to nats streaming")
 		}
+		return errors.New("failed publish to nats streaming")
 	}
 
 	// Push to redis if failed
