@@ -6,8 +6,10 @@ import (
 	redigo "github.com/gomodule/redigo/redis"
 )
 
+// Option :nodoc:
 type Option func(*Options) error
 
+// Options :nodoc:
 type Options struct {
 	redisConn                             *redigo.Pool
 	failedMessagesRedisKey                string
@@ -17,6 +19,7 @@ type Options struct {
 	logger                                Logger
 }
 
+// WithRedis :nodoc:
 func WithRedis(conn *redigo.Pool) Option {
 	return func(opt *Options) error {
 		opt.redisConn = conn
@@ -24,6 +27,7 @@ func WithRedis(conn *redigo.Pool) Option {
 	}
 }
 
+// WithFailedMessageRedisKey :nodoc:
 func WithFailedMessageRedisKey(key string) Option {
 	return func(opt *Options) error {
 		opt.failedMessagesRedisKey = key
@@ -31,6 +35,7 @@ func WithFailedMessageRedisKey(key string) Option {
 	}
 }
 
+// WithDeadMessageRedisKey :nodoc:
 func WithDeadMessageRedisKey(key string) Option {
 	return func(opt *Options) error {
 		opt.deadMessagesRedisKey = key
@@ -38,6 +43,7 @@ func WithDeadMessageRedisKey(key string) Option {
 	}
 }
 
+// WithReconnectInterval :nodoc:
 func WithReconnectInterval(duration time.Duration) Option {
 	return func(opt *Options) error {
 		opt.reconnectInterval = duration
@@ -45,6 +51,7 @@ func WithReconnectInterval(duration time.Duration) Option {
 	}
 }
 
+// WithFailedMessagePublishInterval :nodoc:
 func WithFailedMessagePublishInterval(seconds uint64) Option {
 	return func(opt *Options) error {
 		opt.failedMessagePublishIntervalInSeconds = seconds
@@ -52,6 +59,7 @@ func WithFailedMessagePublishInterval(seconds uint64) Option {
 	}
 }
 
+// WithLogger :nodoc:
 func WithLogger(logger Logger) Option {
 	return func(opt *Options) error {
 		opt.logger = logger

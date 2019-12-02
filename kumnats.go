@@ -152,10 +152,9 @@ func (n *natsImpl) run() {
 		go func() {
 			defer n.wg.Done()
 			c := s.Start()
-			select {
-			case <-n.stopCh:
-				close(c)
-			}
+
+			<-n.stopCh
+			close(c)
 		}()
 	}
 
@@ -198,14 +197,15 @@ func (n *natsImpl) Publish(subject string, v []byte) (err error) {
 	if n.opts.redisConn == nil {
 		if err != nil {
 			return err
-		} else {
-			return errors.New("failed publish to nats streaming")
 		}
+		return errors.New("failed publish to nats streaming")
 	}
 
 	// Push to redis if failed
 	client := n.opts.redisConn.Get()
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 	b, err := tapao.Marshal(&natsMessageWithSubject{
 		Subject: subject,
 		Message: v,
@@ -241,7 +241,7 @@ func (n *natsImpl) runCallback() {
 
 func (n *natsImpl) checkWorkerStatus() bool {
 	n.workerLock.Lock()
-	n.workerLock.Unlock()
+	defer n.workerLock.Unlock()
 	return n.workerStatus
 }
 
@@ -261,7 +261,9 @@ func (n *natsImpl) publishFailedMessageFromRedis() {
 	defer n.setWorkerStatus(false)
 
 	client := n.opts.redisConn.Get()
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	for {
 		b, err := redigo.Bytes(client.Do("LPOP", n.opts.failedMessagesRedisKey))
