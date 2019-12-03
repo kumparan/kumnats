@@ -121,7 +121,7 @@ func NewNATSWithCallback(clusterID, clientID, url string, fn NatsCallback, stanO
 }
 
 // NewNATSMessageHandler a wrapper to standardize how we handle NATS messages
-func NewNATSMessageHandler(data MessagePayload, retryAttempts int, retryInterval time.Duration, fn func(payload MessagePayload) error) stan.MsgHandler {
+func NewNATSMessageHandler(data MessagePayload, retryAttempts int, retryInterval time.Duration, lambda func(payload MessagePayload) error) stan.MsgHandler {
 	return func(msg *stan.Msg) {
 		logger := logrus.WithField("msg", utils.Dump(msg))
 		defer func(logger *logrus.Entry) {
@@ -145,10 +145,10 @@ func NewNATSMessageHandler(data MessagePayload, retryAttempts int, retryInterval
 
 		// process payload here
 		err = utils.Retry(retryAttempts, retryInterval, func() error {
-			return fn(data)
+			return lambda(data)
 		})
 		if err != nil {
-			logger.Error(ErrGiveUpProcessingMessagePayload)
+			logger.WithField("payload", utils.Dump(data)).Error(ErrGiveUpProcessingMessagePayload)
 		}
 	}
 }
