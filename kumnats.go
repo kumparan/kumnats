@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kumparan/go-lib/utils"
+
 	"github.com/sirupsen/logrus"
 
 	redigo "github.com/gomodule/redigo/redis"
@@ -27,6 +29,7 @@ type (
 		Error(args ...interface{})
 		Errorf(format string, args ...interface{})
 	}
+
 	// EventType :nodoc:
 	EventType string
 
@@ -117,6 +120,39 @@ func NewNATSWithCallback(clusterID, clientID, url string, fn NatsCallback, stanO
 	return nc, nil
 }
 
+// NewNATSMessageHandler a wrapper to standardize how we handle NATS messages
+func NewNATSMessageHandler(data MessagePayload, retryAttempts int, retryInterval time.Duration, fn func(payload MessagePayload) error) stan.MsgHandler {
+	return func(msg *stan.Msg) {
+		logger := logrus.WithField("msg", utils.Dump(msg))
+		defer func(logger *logrus.Entry) {
+			err := msg.Ack()
+			if err != nil {
+				logger.Error(err)
+			}
+		}(logger)
+
+		if msg.Data == nil {
+			logger.Error(ErrNilMessagePayload)
+			return
+		}
+
+		err := data.ParseBytes(msg.Data)
+		if err != nil {
+			logger.WithField("error-detail", err).Error(ErrBadUnmarshalResult)
+			return
+		}
+		defer logger.WithField("payload", utils.Dump(data)).Warn("message payload")
+
+		// process payload here
+		err = utils.Retry(retryAttempts, retryInterval, func() error {
+			return fn(data)
+		})
+		if err != nil {
+			logger.Error(ErrGiveUpProcessingMessagePayload)
+		}
+	}
+}
+
 // connect to nats streaming
 func connect(clusterID, clientID, url string, options ...stan.Option) (stan.Conn, error) {
 	options = append(options, stan.NatsURL(url))
@@ -125,41 +161,6 @@ func connect(clusterID, clientID, url string, options ...stan.Option) (stan.Conn
 		return nil, err
 	}
 	return nc, nil
-}
-
-func (n *natsImpl) setConn(conn stan.Conn) {
-	n.mutex.Lock()
-	n.conn = conn
-	n.mutex.Unlock()
-}
-
-func (n *natsImpl) checkConnIsValid() (b bool) {
-	n.mutex.RLock()
-	defer n.mutex.RUnlock()
-	if n.conn.NatsConn() != nil && n.conn.NatsConn().IsConnected() {
-		return true
-	}
-	return false
-}
-
-// Run :nodoc:
-func (n *natsImpl) run() {
-	if n.opts.redisConn != nil {
-		s := gocron.NewScheduler()
-		s.Every(n.opts.failedMessagePublishIntervalInSeconds).Seconds().Do(n.publishFailedMessageFromRedis)
-
-		n.wg.Add(1)
-		go func() {
-			defer n.wg.Done()
-			c := s.Start()
-
-			<-n.stopCh
-			close(c)
-		}()
-	}
-
-	n.wg.Add(1)
-	go n.reconnectWorker()
 }
 
 // Close NatsConnection :nodoc:
@@ -231,6 +232,40 @@ func (n *natsImpl) QueueSubscribe(subject, qgroup string, cb stan.MsgHandler, op
 // Subscribe :nodoc:
 func (n *natsImpl) Subscribe(subject string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error) {
 	return n.conn.Subscribe(subject, cb, opts...)
+}
+
+func (n *natsImpl) setConn(conn stan.Conn) {
+	n.mutex.Lock()
+	n.conn = conn
+	n.mutex.Unlock()
+}
+
+func (n *natsImpl) checkConnIsValid() (b bool) {
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+	if n.conn.NatsConn() != nil && n.conn.NatsConn().IsConnected() {
+		return true
+	}
+	return false
+}
+
+func (n *natsImpl) run() {
+	if n.opts.redisConn != nil {
+		s := gocron.NewScheduler()
+		s.Every(n.opts.failedMessagePublishIntervalInSeconds).Seconds().Do(n.publishFailedMessageFromRedis)
+
+		n.wg.Add(1)
+		go func() {
+			defer n.wg.Done()
+			c := s.Start()
+
+			<-n.stopCh
+			close(c)
+		}()
+	}
+
+	n.wg.Add(1)
+	go n.reconnectWorker()
 }
 
 func (n *natsImpl) runCallback() {
