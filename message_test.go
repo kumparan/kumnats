@@ -21,7 +21,7 @@ func TestNatsMessage_ParseBytes(t *testing.T) {
 	assert.NoError(t, err)
 
 	m := new(NatsMessage)
-	err = m.ParseBytes(data)
+	err = m.ParseFromBytes(data)
 	assert.NoError(t, err)
 	assert.Equal(t, msg.ID, m.ID)
 	assert.Equal(t, msg.UserID, m.UserID)

@@ -121,7 +121,9 @@ func NewNATSWithCallback(clusterID, clientID, url string, fn NatsCallback, stanO
 }
 
 // NewNATSMessageHandler a wrapper to standardize how we handle NATS messages
-func NewNATSMessageHandler(data MessagePayload, retryAttempts int, retryInterval time.Duration, lambda func(payload MessagePayload) error) stan.MsgHandler {
+// Payload (arg 0) should always be empty when the method is called. The payload data will later
+// parse data from msg.Data.
+func NewNATSMessageHandler(payload MessagePayload, retryAttempts int, retryInterval time.Duration, lambda func(payload MessagePayload) error) stan.MsgHandler {
 	return func(msg *stan.Msg) {
 		logger := logrus.WithField("msg", utils.Dump(msg))
 		defer func(logger *logrus.Entry) {
@@ -136,19 +138,19 @@ func NewNATSMessageHandler(data MessagePayload, retryAttempts int, retryInterval
 			return
 		}
 
-		err := data.ParseBytes(msg.Data)
+		err := payload.ParseFromBytes(msg.Data)
 		if err != nil {
 			logger.WithField("error-detail", err).Error(ErrBadUnmarshalResult)
 			return
 		}
-		defer logger.WithField("payload", utils.Dump(data)).Warn("message payload")
+		defer logger.WithField("payload", utils.Dump(payload)).Warn("message payload")
 
 		// process payload here
 		err = utils.Retry(retryAttempts, retryInterval, func() error {
-			return lambda(data)
+			return lambda(payload)
 		})
 		if err != nil {
-			logger.WithField("payload", utils.Dump(data)).Error(ErrGiveUpProcessingMessagePayload)
+			logger.WithField("payload", utils.Dump(payload)).Error(ErrGiveUpProcessingMessagePayload)
 		}
 	}
 }
