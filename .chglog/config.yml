@@ -1,0 +1,32 @@
+style: github
+template: CHANGELOG.tpl.md
+info:
+  title: CHANGELOG
+  repository_url: https://github.com/kumparan/kumnats
+options:
+  commits:
+     filters:
+       Type:
+         - feature
+         - bugfix
+         - hotfix
+         - refactor
+         - test
+         - misc
+  commit_groups:
+     title_maps:
+       feature: New Features
+       bugfix: Fixes
+       hotfix: Fixes
+       refactor: Code Improvements
+       test: Test Improvements
+       misc: Other Improvements
+  header:
+    pattern: "^(\\w*)\\:\\s(.*)$"
+    pattern_maps:
+      - Type
+      - Subject
+  notes:
+    keywords:
+      - BREAKING CHANGE
+
