@@ -69,10 +69,23 @@ func newRedisConn(url string) *redigo.Pool {
 }
 
 func TestMain(t *testing.M) {
-	server := runServer(clusterName, 4222)
-	defer server.Shutdown()
+	srv := runServer(clusterName, 4222)
+	defer srv.Shutdown()
 	m := t.Run()
 	os.Exit(m)
+}
+
+func TestSafePublish(t *testing.T) {
+	n, err := NewNATSWithCallback(clusterName, clientName, defaultURL, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.Close()
+
+	err = n.SafePublish("test-channel", []byte("test"))
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestPublish(t *testing.T) {
@@ -80,7 +93,9 @@ func TestPublish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer n.Close()
+	defer func() {
+		_ = n.Close()
+	}()
 
 	err = n.Publish("test-channel", []byte("test"))
 	if err != nil {
@@ -93,7 +108,9 @@ func TestSubscribe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer n.Close()
+	defer func() {
+		_ = n.Close()
+	}()
 
 	subject := "test-channel"
 
@@ -135,13 +152,13 @@ func TestSubscribe(t *testing.T) {
 		}
 
 	}
-	sub.Unsubscribe()
+	_ = sub.Unsubscribe()
 }
 
 func TestPublishFailedAndSaveToRedis(t *testing.T) {
 	port := 21111
-	server := runAnotherServer(port)
-	defer server.Shutdown()
+	srv := runAnotherServer(port)
+	defer srv.Shutdown()
 
 	m, err := miniredis.Run()
 	if err != nil {
@@ -162,9 +179,11 @@ func TestPublishFailedAndSaveToRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
-	server.Shutdown()
+	srv.Shutdown()
 
 	type msg struct {
 		Data string `json:"data"`
@@ -177,13 +196,15 @@ func TestPublishFailedAndSaveToRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = conn.Publish("test", msgBytes)
+	err = conn.SafePublish("test", msgBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	rClient := r.Get()
-	defer rClient.Close()
+	defer func() {
+		_ = rClient.Close()
+	}()
 
 	b, err := redigo.Bytes(rClient.Do("LPOP", defaultOptions.failedMessagesRedisKey))
 	if err != nil {
@@ -197,17 +218,19 @@ func TestPublishFailedAndSaveToRedis(t *testing.T) {
 
 func TestReconnectAfterLostConnection(t *testing.T) {
 	port := 22222
-	server := runAnotherServer(port)
-	defer server.Shutdown()
+	srv := runAnotherServer(port)
+	defer srv.Shutdown()
 
 	conn, err := NewNATSWithCallback(clusterName, clientName, fmt.Sprintf("localhost:%d", port), nil, nil, WithReconnectInterval(10*time.Millisecond))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
-	// shutdown the server
-	server.Shutdown()
+	// shutdown the srv
+	srv.Shutdown()
 
 	v, ok := conn.(*natsImpl)
 	if !ok {
@@ -218,8 +241,8 @@ func TestReconnectAfterLostConnection(t *testing.T) {
 		t.Fatal("should be not valid")
 	}
 
-	server = runAnotherServer(port)
-	defer server.Shutdown()
+	srv = runAnotherServer(port)
+	defer srv.Shutdown()
 
 	time.Sleep(1800 * time.Millisecond) // wait for making connection
 
@@ -230,18 +253,15 @@ func TestReconnectAfterLostConnection(t *testing.T) {
 
 func TestSubscribeAfterLostConnection(t *testing.T) {
 	port := 23333
-	server := runAnotherServer(port)
-	defer server.Shutdown()
+	srv := runAnotherServer(port)
+	defer srv.Shutdown()
 
 	subject := "test"
-	recieveCh := make(chan []byte, 2)
+	receiverChan := make(chan []byte, 2)
 
 	conn, err := NewNATSWithCallback(clusterName, clientName, fmt.Sprintf("localhost:%d", port), func(n NATS) {
 		_, err := n.Subscribe(subject, func(msg *stan.Msg) {
-			select {
-			case recieveCh <- msg.Data:
-
-			}
+			receiverChan <- msg.Data
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -250,15 +270,17 @@ func TestSubscribeAfterLostConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
-	err = conn.Publish(subject, []byte("test"))
+	err = conn.SafePublish(subject, []byte("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-recieveCh
+	<-receiverChan
 
-	server.Shutdown()
+	srv.Shutdown()
 
 	v, ok := conn.(*natsImpl)
 	if !ok {
@@ -269,26 +291,26 @@ func TestSubscribeAfterLostConnection(t *testing.T) {
 		t.Fatal("should be not valid")
 	}
 
-	server = runAnotherServer(port)
-	defer server.Shutdown()
+	srv = runAnotherServer(port)
+	defer srv.Shutdown()
 
 	time.Sleep(5 * time.Second) // wait for making connection
 
 	if !v.checkConnIsValid() {
 		t.Fatal("should be valid")
 	}
-	err = conn.Publish(subject, []byte("test"))
+	err = conn.SafePublish(subject, []byte("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-recieveCh
-	close(recieveCh)
+	<-receiverChan
+	close(receiverChan)
 }
 
 func TestRunningWorkerAfterLostConnection_Success(t *testing.T) {
 	port := 24444
-	server := runAnotherServer(port)
-	defer server.Shutdown()
+	srv := runAnotherServer(port)
+	defer srv.Shutdown()
 
 	m, err := miniredis.Run()
 	if err != nil {
@@ -309,9 +331,11 @@ func TestRunningWorkerAfterLostConnection_Success(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
-	server.Shutdown()
+	srv.Shutdown()
 
 	type msg struct {
 		Data string `json:"data"`
@@ -324,7 +348,7 @@ func TestRunningWorkerAfterLostConnection_Success(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = conn.Publish("test", msgBytes)
+	err = conn.SafePublish("test", msgBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +363,10 @@ func TestRunningWorkerAfterLostConnection_Success(t *testing.T) {
 	}
 
 	redisConn := v.opts.redisConn.Get()
-	defer redisConn.Close()
+	defer func() {
+		_ = redisConn.Close()
+	}()
+
 
 	i, err := redigo.Int(redisConn.Do("llen", v.opts.failedMessagesRedisKey))
 	if err != nil {
@@ -350,8 +377,8 @@ func TestRunningWorkerAfterLostConnection_Success(t *testing.T) {
 		t.Fatal("Length of failed-message should be 1")
 	}
 
-	server = runAnotherServer(port)
-	defer server.Shutdown()
+	srv = runAnotherServer(port)
+	defer srv.Shutdown()
 
 	time.Sleep(10 * time.Second) // wait for making connection
 
@@ -387,8 +414,8 @@ func TestRunningWorkerAfterLostConnection_Success(t *testing.T) {
 
 func TestRunningWorkerAfterLostConnection_Failed(t *testing.T) {
 	port := 24444
-	server := runAnotherServer(port)
-	defer server.Shutdown()
+	srv := runAnotherServer(port)
+	defer srv.Shutdown()
 
 	m, err := miniredis.Run()
 	if err != nil {
@@ -409,9 +436,12 @@ func TestRunningWorkerAfterLostConnection_Failed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+  
+	defer func() {
+		_ = conn.Close()
+	}()
 
-	server.Shutdown()
+	srv.Shutdown()
 
 	type msg struct {
 		Data string `json:"data"`
@@ -424,7 +454,8 @@ func TestRunningWorkerAfterLostConnection_Failed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = conn.Publish("test", msgBytes)
+
+	err = conn.SafePublish("test", msgBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +470,9 @@ func TestRunningWorkerAfterLostConnection_Failed(t *testing.T) {
 	}
 
 	redisConn := v.opts.redisConn.Get()
-	defer redisConn.Close()
+	defer func() {
+		_ = redisConn.Close()
+	}()
 
 	i, err := redigo.Int(redisConn.Do("llen", v.opts.failedMessagesRedisKey))
 	if err != nil {
