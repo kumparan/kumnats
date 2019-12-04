@@ -64,10 +64,17 @@ type (
 	}
 )
 
+const (
+	// DeadMessagesRedisKey :nodoc:
+	DeadMessagesRedisKey = "nats:dead-messages"
+	// FailedMessagesRedisKey :nodoc:
+	FailedMessagesRedisKey = "nats:failed-messages"
+)
+
 var defaultOptions = Options{
 	redisConn:                             nil,
-	failedMessagesRedisKey:                "nats:failed-messages",
-	deadMessagesRedisKey:                  "nats:dead-messages",
+	failedMessagesRedisKey:                FailedMessagesRedisKey,
+	deadMessagesRedisKey:                  DeadMessagesRedisKey,
 	reconnectInterval:                     500 * time.Millisecond,
 	failedMessagePublishIntervalInSeconds: 120,
 	logger:                                logrus.New(),
