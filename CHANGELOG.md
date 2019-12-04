@@ -1,5 +1,11 @@
 # kumnats
 
+<a name="v2.3.0"></a>
+## [v2.3.0] - 2019-12-04
+### New Features
+- migrate v2 to master
+
+
 <a name="v2.2.0"></a>
 ## [v2.2.0] - 2019-12-04
 ### Code Improvements
@@ -31,7 +37,8 @@
 <a name="v1.0.0"></a>
 ## v1.0.0 - 2019-04-04
 
-[Unreleased]: https://github.com/kumparan/kumnats/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/kumparan/kumnats/compare/v2.3.0...HEAD
+[v2.3.0]: https://github.com/kumparan/kumnats/compare/v2.2.0...v2.3.0
 [v2.2.0]: https://github.com/kumparan/kumnats/compare/v2.1.1...v2.2.0
 [v2.1.1]: https://github.com/kumparan/kumnats/compare/v1.2.1...v2.1.1
 [v1.2.1]: https://github.com/kumparan/kumnats/compare/v2.1.0...v1.2.1
