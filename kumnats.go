@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kumparan/go-lib/utils"
+
 	"github.com/sirupsen/logrus"
 
 	redigo "github.com/gomodule/redigo/redis"
@@ -28,6 +30,7 @@ type (
 		Error(args ...interface{})
 		Errorf(format string, args ...interface{})
 	}
+
 	// EventType :nodoc:
 	EventType string
 
@@ -118,6 +121,41 @@ func NewNATSWithCallback(clusterID, clientID, url string, fn NatsCallback, stanO
 	return nc, nil
 }
 
+// NewNATSMessageHandler a wrapper to standardize how we handle NATS messages
+// Payload (arg 0) should always be empty when the method is called. The payload data will later
+// parse data from msg.Data.
+func NewNATSMessageHandler(payload MessagePayload, retryAttempts int, retryInterval time.Duration, lambda func(payload MessagePayload) error) stan.MsgHandler {
+	return func(msg *stan.Msg) {
+		logger := logrus.WithField("msg", utils.Dump(msg))
+		defer func(logger *logrus.Entry) {
+			err := msg.Ack()
+			if err != nil {
+				logger.Error(err)
+			}
+		}(logger)
+
+		if msg.Data == nil {
+			logger.Error(ErrNilMessagePayload)
+			return
+		}
+
+		err := payload.ParseFromBytes(msg.Data)
+		if err != nil {
+			logger.WithField("error-detail", err).Error(ErrBadUnmarshalResult)
+			return
+		}
+		defer logger.WithField("payload", utils.Dump(payload)).Warn("message payload")
+
+		// process payload here
+		err = utils.Retry(retryAttempts, retryInterval, func() error {
+			return lambda(payload)
+		})
+		if err != nil {
+			logger.WithField("payload", utils.Dump(payload)).Error(ErrGiveUpProcessingMessagePayload)
+		}
+	}
+}
+
 // connect to nats streaming
 func connect(clusterID, clientID, url string, options ...stan.Option) (stan.Conn, error) {
 	options = append(options, stan.NatsURL(url))
@@ -126,42 +164,6 @@ func connect(clusterID, clientID, url string, options ...stan.Option) (stan.Conn
 		return nil, err
 	}
 	return nc, nil
-}
-
-func (n *natsImpl) setConn(conn stan.Conn) {
-	n.mutex.Lock()
-	n.conn = conn
-	n.mutex.Unlock()
-}
-
-func (n *natsImpl) checkConnIsValid() (b bool) {
-	n.mutex.RLock()
-	defer n.mutex.RUnlock()
-	if n.conn.NatsConn() != nil && n.conn.NatsConn().IsConnected() {
-		return true
-	}
-	return false
-}
-
-// Run :nodoc:
-func (n *natsImpl) run() {
-	if n.opts.redisConn != nil {
-		s := gocron.NewScheduler()
-		s.Every(n.opts.failedMessagePublishIntervalInSeconds).Seconds().Do(n.publishFailedMessageFromRedis)
-
-		n.wg.Add(1)
-		go func() {
-			defer n.wg.Done()
-			c := s.Start()
-			select {
-			case <-n.stopCh:
-				close(c)
-			}
-		}()
-	}
-
-	n.wg.Add(1)
-	go n.reconnectWorker()
 }
 
 // Close NatsConnection :nodoc:
@@ -207,14 +209,15 @@ func (n *natsImpl) SafePublish(subject string, v []byte) (err error) {
 	if n.opts.redisConn == nil {
 		if err != nil {
 			return err
-		} else {
-			return errors.New("failed publish to nats streaming")
 		}
+		return errors.New("failed publish to nats streaming")
 	}
 
 	// Push to redis if failed
 	client := n.opts.redisConn.Get()
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 	b, err := tapao.Marshal(&natsMessageWithSubject{
 		Subject: subject,
 		Message: v,
@@ -242,6 +245,40 @@ func (n *natsImpl) Subscribe(subject string, cb stan.MsgHandler, opts ...stan.Su
 	return n.conn.Subscribe(subject, cb, opts...)
 }
 
+func (n *natsImpl) setConn(conn stan.Conn) {
+	n.mutex.Lock()
+	n.conn = conn
+	n.mutex.Unlock()
+}
+
+func (n *natsImpl) checkConnIsValid() (b bool) {
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+	if n.conn.NatsConn() != nil && n.conn.NatsConn().IsConnected() {
+		return true
+	}
+	return false
+}
+
+func (n *natsImpl) run() {
+	if n.opts.redisConn != nil {
+		s := gocron.NewScheduler()
+		s.Every(n.opts.failedMessagePublishIntervalInSeconds).Seconds().Do(n.publishFailedMessageFromRedis)
+
+		n.wg.Add(1)
+		go func() {
+			defer n.wg.Done()
+			c := s.Start()
+
+			<-n.stopCh
+			close(c)
+		}()
+	}
+
+	n.wg.Add(1)
+	go n.reconnectWorker()
+}
+
 func (n *natsImpl) runCallback() {
 	if n.info.callback != nil {
 		n.info.callback(n)
@@ -250,7 +287,7 @@ func (n *natsImpl) runCallback() {
 
 func (n *natsImpl) checkWorkerStatus() bool {
 	n.workerLock.Lock()
-	n.workerLock.Unlock()
+	defer n.workerLock.Unlock()
 	return n.workerStatus
 }
 
@@ -270,7 +307,9 @@ func (n *natsImpl) publishFailedMessageFromRedis() {
 	defer n.setWorkerStatus(false)
 
 	client := n.opts.redisConn.Get()
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	for {
 		b, err := redigo.Bytes(client.Do("LPOP", n.opts.failedMessagesRedisKey))
