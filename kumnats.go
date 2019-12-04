@@ -60,9 +60,10 @@ type (
 	}
 )
 
-// cache key
 const (
-	DeadMessagesRedisKey   = "nats:dead-messages"
+	// DeadMessagesRedisKey :nodoc:
+	DeadMessagesRedisKey = "nats:dead-messages"
+	// FailedMessagesRedisKey :nodoc:
 	FailedMessagesRedisKey = "nats:failed-messages"
 )
 
