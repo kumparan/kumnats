@@ -3,7 +3,7 @@ SHELL:=/bin/bash
 changelog_args=-o CHANGELOG.md -p '^v'
 
 lint:
-	golangci-lint run --concurrency 4 --print-issued-lines=false --exclude-use-default=false --enable=golint --enable=goimports  --enable=unconvert --enable=unparam
+	golangci-lint run --concurrency 4 --print-issued-lines=false --exclude-use-default=false --enable=golint --enable=goimports  --enable=unconvert --enable=unparam --fix
 
 changelog:
 ifdef version

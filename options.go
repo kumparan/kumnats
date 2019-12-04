@@ -43,7 +43,6 @@ func WithDeadMessageRedisKey(key string) Option {
 	}
 }
 
-
 // WithReconnectInterval :nodoc:
 func WithReconnectInterval(duration time.Duration) Option {
 	return func(opt *Options) error {

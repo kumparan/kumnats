@@ -80,7 +80,9 @@ func TestSafePublish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer n.Close()
+	defer func() {
+		_ = n.Close()
+	}()
 
 	err = n.SafePublish("test-channel", []byte("test"))
 	if err != nil {
@@ -367,7 +369,6 @@ func TestRunningWorkerAfterLostConnection_Success(t *testing.T) {
 		_ = redisConn.Close()
 	}()
 
-
 	i, err := redigo.Int(redisConn.Do("llen", v.opts.failedMessagesRedisKey))
 	if err != nil {
 		t.Fatal(err)
@@ -436,7 +437,7 @@ func TestRunningWorkerAfterLostConnection_Failed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-  
+
 	defer func() {
 		_ = conn.Close()
 	}()
