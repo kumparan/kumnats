@@ -1,4 +1,4 @@
-style: gitlab
+style: github
 template: CHANGELOG.tpl.md
 info:
   title: CHANGELOG
