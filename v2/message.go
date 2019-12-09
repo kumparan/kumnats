@@ -24,11 +24,26 @@ type (
 		Subject string `json:"subject"`
 		Message []byte `json:"message"`
 	}
+
+	// NatsMessageWithOldData :nodoc:
+	NatsMessageWithOldData struct {
+		NatsMessage
+		OldData string `json:"old_data,omitempty"`
+	}
 )
 
 // ParseFromBytes implementation of NatsMessage
 func (m *NatsMessage) ParseFromBytes(data []byte) (err error) {
 	err = tapao.Unmarshal(data, &m, tapao.FallbackWith(tapao.JSON))
+	if err != nil {
+		logrus.WithField("data", string(data)).Error(err)
+	}
+	return
+}
+
+// ParseFromBytes implementation of NatsMessageWithOldData
+func (n *NatsMessageWithOldData) ParseFromBytes(data []byte) (err error) {
+	err = tapao.Unmarshal(data, &n, tapao.FallbackWith(tapao.JSON))
 	if err != nil {
 		logrus.WithField("data", string(data)).Error(err)
 	}
