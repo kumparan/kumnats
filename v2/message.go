@@ -25,6 +25,7 @@ type (
 		Message []byte `json:"message"`
 	}
 
+	// NatsMessageWithOldData :nodoc:
 	NatsMessageWithOldData struct {
 		NatsMessage
 		OldData string `json:"old_data,omitempty"`
@@ -40,6 +41,7 @@ func (m *NatsMessage) ParseFromBytes(data []byte) (err error) {
 	return
 }
 
+// ParseFromBytes implementation of NatsMessageWithOldData
 func (n *NatsMessageWithOldData) ParseFromBytes(data []byte) (err error) {
 	err = tapao.Unmarshal(data, &n, tapao.FallbackWith(tapao.JSON))
 	if err != nil {
