@@ -158,7 +158,10 @@ func NewNATSMessageHandler(payload MessagePayload, retryAttempts int, retryInter
 			return lambda(payload)
 		})
 		if err != nil {
-			logger.WithField("payload", utils.Dump(payload)).Error(ErrGiveUpProcessingMessagePayload)
+			logger.WithFields(logrus.Fields{
+				"payload": utils.Dump(payload),
+				"cause":   err.Error(),
+			}).Error(ErrGiveUpProcessingMessagePayload)
 		}
 	}
 }
