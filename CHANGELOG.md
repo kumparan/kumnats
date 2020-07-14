@@ -1,9 +1,15 @@
 # kumnats
 
-<a name="v.2.4.1"></a>
-## [v.2.4.1] - 2019-12-19
+<a name="v2.5.0"></a>
+## [v2.5.0] - 2020-07-14
 ### New Features
-- add more information on giveup error log
+- add proto request to message
+
+
+<a name="v2.4.1"></a>
+## [v2.4.1] - 2019-12-19
+### New Features
+- log give up cause on subscriber ([#17](https://github.com/kumparan/kumnats/issues/17))
 
 
 <a name="v2.4.0"></a>
@@ -49,8 +55,9 @@
 <a name="v1.0.0"></a>
 ## v1.0.0 - 2019-04-04
 
-[Unreleased]: https://github.com/kumparan/kumnats/compare/v.2.4.1...HEAD
-[v.2.4.1]: https://github.com/kumparan/kumnats/compare/v2.4.0...v.2.4.1
+[Unreleased]: https://github.com/kumparan/kumnats/compare/v2.5.0...HEAD
+[v2.5.0]: https://github.com/kumparan/kumnats/compare/v2.4.1...v2.5.0
+[v2.4.1]: https://github.com/kumparan/kumnats/compare/v2.4.0...v2.4.1
 [v2.4.0]: https://github.com/kumparan/kumnats/compare/v2.3.0...v2.4.0
 [v2.3.0]: https://github.com/kumparan/kumnats/compare/v2.2.0...v2.3.0
 [v2.2.0]: https://github.com/kumparan/kumnats/compare/v2.1.1...v2.2.0
