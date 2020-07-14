@@ -6,8 +6,13 @@ type (
 		ID     int64     `json:"id"`
 		UserID int64     `json:"user_id"`
 		Type   EventType `json:"type"`
-		Body   string    `json:"body,omitempty"`
 		Time   string    `json:"time"`
+		// deprecated field
+		// keep it for now for backwards compatibility
+		Body   string    `json:"body,omitempty"`
+
+		// new fields
+		Request []byte 		`json:"request"`
 	}
 
 	natsMessageWithSubject struct {
