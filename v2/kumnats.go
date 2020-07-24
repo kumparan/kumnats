@@ -37,6 +37,9 @@ type (
 	// NatsCallback :nodoc:
 	NatsCallback func(conn NATS)
 
+	// MessageHandler type
+	MessageHandler func(payload MessagePayload) (err error)
+
 	// NATS :nodoc:
 	natsImpl struct {
 		conn  stan.Conn
@@ -162,6 +165,55 @@ func NewNATSMessageHandler(payload MessagePayload, retryAttempts int, retryInter
 				"payload": utils.Dump(payload),
 				"cause":   err.Error(),
 			}).Error(ErrGiveUpProcessingMessagePayload)
+		}
+	}
+}
+
+// NewNATSMessageWithErrorHandler a wrapper to standardize how we handle NATS messages
+// Payload (arg 0) should always be empty when the method is called. The payload data will later
+// parse data from msg.Data.
+func NewNATSMessageWithErrorHandler(payload MessagePayload, retryAttempts int, retryInterval time.Duration, msgHandler MessageHandler, errHandler MessageHandler) stan.MsgHandler {
+	return func(msg *stan.Msg) {
+		logger := logrus.WithField("msg", utils.Dump(msg))
+		defer func(logger *logrus.Entry) {
+			err := msg.Ack()
+			if err != nil {
+				logger.Error(err)
+			}
+		}(logger)
+
+		if msg.Data == nil {
+			logger.Error(ErrNilMessagePayload)
+			return
+		}
+
+		err := payload.ParseFromBytes(msg.Data)
+		if err != nil {
+			logger.WithField("error-detail", err).Error(ErrBadUnmarshalResult)
+			return
+		}
+		defer logger.WithField("payload", utils.Dump(payload)).Warn("message payload")
+
+		// process payload here
+		retryErr := utils.Retry(retryAttempts, retryInterval, func() error {
+			return msgHandler(payload)
+		})
+		if retryErr == nil {
+			return
+		}
+		logger.WithFields(logrus.Fields{
+			"payload": utils.Dump(payload),
+			"cause":   ErrGiveUpProcessingMessagePayload,
+		}).Error(retryErr)
+
+		// hand over to error handler
+		logrus.WithField("payload", utils.Dump(payload)).Warnf("handling ErrGiveUpProcessingMessagePayload")
+		err = errHandler(payload)
+		if err != nil {
+			logger.WithFields(logrus.Fields{
+				"payload": utils.Dump(payload),
+				"cause":   err.Error(),
+			}).Error(err)
 		}
 	}
 }
