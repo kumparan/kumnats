@@ -1,5 +1,11 @@
 # kumnats
 
+<a name="v2.6.0"></a>
+## [v2.6.0] - 2020-07-24
+### New Features
+- add NewNATSMessageWithErrorHandler
+
+
 <a name="v2.5.0"></a>
 ## [v2.5.0] - 2020-07-14
 ### New Features
@@ -55,7 +61,8 @@
 <a name="v1.0.0"></a>
 ## v1.0.0 - 2019-04-04
 
-[Unreleased]: https://github.com/kumparan/kumnats/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/kumparan/kumnats/compare/v2.6.0...HEAD
+[v2.6.0]: https://github.com/kumparan/kumnats/compare/v2.5.0...v2.6.0
 [v2.5.0]: https://github.com/kumparan/kumnats/compare/v2.4.1...v2.5.0
 [v2.4.1]: https://github.com/kumparan/kumnats/compare/v2.4.0...v2.4.1
 [v2.4.0]: https://github.com/kumparan/kumnats/compare/v2.3.0...v2.4.0
