@@ -19,10 +19,10 @@ type (
 		Time   string    `json:"time"`
 		// deprecated field
 		// keep it for now for backwards compatibility
-		Body   string    `json:"body,omitempty"`
+		Body string `json:"body,omitempty"`
 
 		// new fields
-		Request []byte 		`json:"request"`
+		Request []byte `json:"request"`
 	}
 
 	natsMessageWithSubject struct {
@@ -34,6 +34,17 @@ type (
 	NatsMessageWithOldData struct {
 		NatsMessage
 		OldData string `json:"old_data,omitempty"`
+	}
+
+	// AuditLogMessage :nodoc:
+	AuditLogMessage struct {
+		ServiceName    string `json:"service_name"`
+		UserID         int64  `json:"user_id"`
+		AuditableType  string `json:"auditable_type"`
+		AuditableID    string `json:"auditable_id"`
+		Action         string `json:"action"`
+		AuditedChanges string `json:"audited_changes"`
+		CreatedAt      string `json:"created_at"`
 	}
 )
 
