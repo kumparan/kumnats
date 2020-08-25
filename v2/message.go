@@ -19,10 +19,10 @@ type (
 		Time   string    `json:"time"`
 		// deprecated field
 		// keep it for now for backwards compatibility
-		Body   string    `json:"body,omitempty"`
+		Body string `json:"body,omitempty"`
 
 		// new fields
-		Request []byte 		`json:"request"`
+		Request []byte `json:"request"`
 	}
 
 	natsMessageWithSubject struct {
