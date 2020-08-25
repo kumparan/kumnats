@@ -65,3 +65,12 @@ func (n *NatsMessageWithOldData) ParseFromBytes(data []byte) (err error) {
 	}
 	return
 }
+
+// ParseFromBytes implementation of AuditLogMessage
+func (m *AuditLogMessage) ParseFromBytes(data []byte) (err error) {
+	err = tapao.Unmarshal(data, &m, tapao.FallbackWith(tapao.JSON))
+	if err != nil {
+		logrus.WithField("data", string(data)).Error(err)
+	}
+	return
+}
