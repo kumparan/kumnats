@@ -1,6 +1,8 @@
 package kumnats
 
 import (
+	"time"
+
 	"github.com/kumparan/tapao"
 	"github.com/sirupsen/logrus"
 )
@@ -38,13 +40,13 @@ type (
 
 	// AuditLogMessage :nodoc:
 	AuditLogMessage struct {
-		ServiceName    string `json:"service_name"`
-		UserID         int64  `json:"user_id"`
-		AuditableType  string `json:"auditable_type"`
-		AuditableID    string `json:"auditable_id"`
-		Action         string `json:"action"`
-		AuditedChanges string `json:"audited_changes"`
-		CreatedAt      string `json:"created_at"`
+		ServiceName    string    `json:"service_name"`
+		UserID         int64     `json:"user_id"`
+		AuditableType  string    `json:"auditable_type"`
+		AuditableID    string    `json:"auditable_id"`
+		Action         string    `json:"action"`
+		AuditedChanges string    `json:"audited_changes"`
+		CreatedAt      time.Time `json:"created_at"`
 	}
 )
 
