@@ -9,6 +9,8 @@ type (
 	// MessagePayload :nodoc:
 	MessagePayload interface {
 		ParseFromBytes(data []byte) error
+		ToJSON() (string, error)
+		ParseFromJSON(data string) (err error)
 	}
 
 	// NatsMessage :nodoc:
@@ -52,11 +54,11 @@ func (m *NatsMessage) ToJSON() (string, error) {
 	return string(bt), err
 }
 
-// ParseFromString parse string to NatsMessage
+// ParseFromJSON parse string to NatsMessage
 func (m *NatsMessage) ParseFromJSON(data string) (err error) {
 	err = tapao.Unmarshal([]byte(data), &m, tapao.FallbackWith(tapao.JSON))
 	if err != nil {
-		logrus.WithField("data", string(data)).Error(err)
+		logrus.WithField("data", data).Error(err)
 	}
 	return
 }
@@ -66,6 +68,21 @@ func (n *NatsMessageWithOldData) ParseFromBytes(data []byte) (err error) {
 	err = tapao.Unmarshal(data, &n, tapao.FallbackWith(tapao.JSON))
 	if err != nil {
 		logrus.WithField("data", string(data)).Error(err)
+	}
+	return
+}
+
+// ToJSON Marshal Message into JSON format
+func (m *NatsMessageWithOldData) ToJSON() (string, error) {
+	bt, err := tapao.Marshal(m, tapao.FallbackWith(tapao.JSON))
+	return string(bt), err
+}
+
+// ParseFromJSON parse string to NatsMessage
+func (m *NatsMessageWithOldData) ParseFromJSON(data string) (err error) {
+	err = tapao.Unmarshal([]byte(data), &m, tapao.FallbackWith(tapao.JSON))
+	if err != nil {
+		logrus.WithField("data", data).Error(err)
 	}
 	return
 }
