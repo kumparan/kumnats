@@ -9,8 +9,8 @@ type (
 	// MessagePayload :nodoc:
 	MessagePayload interface {
 		ParseFromBytes(data []byte) error
-		ToJSON() (string, error)
-		ParseFromJSON(data string) (err error)
+		//ToJSON() (string, error)
+		//ParseFromJSON(data string) (err error)
 	}
 
 	// NatsMessage :nodoc:
