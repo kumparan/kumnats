@@ -19,10 +19,10 @@ type (
 		Time   string    `json:"time"`
 		// deprecated field
 		// keep it for now for backwards compatibility
-		Body   string    `json:"body,omitempty"`
+		Body string `json:"body,omitempty"`
 
 		// new fields
-		Request []byte 		`json:"request"`
+		Request []byte `json:"request"`
 	}
 
 	natsMessageWithSubject struct {
@@ -40,6 +40,21 @@ type (
 // ParseFromBytes implementation of NatsMessage
 func (m *NatsMessage) ParseFromBytes(data []byte) (err error) {
 	err = tapao.Unmarshal(data, &m, tapao.FallbackWith(tapao.JSON))
+	if err != nil {
+		logrus.WithField("data", string(data)).Error(err)
+	}
+	return
+}
+
+// ToJSON Marshal Message into JSON format
+func (m *NatsMessage) ToJSON() (string, error) {
+	bt, err := tapao.Marshal(m, tapao.FallbackWith(tapao.JSON))
+	return string(bt), err
+}
+
+// ParseFromString parse string to NatsMessage
+func (m *NatsMessage) ParseFromJSON(data string) (err error) {
+	err = tapao.Unmarshal([]byte(data), &m, tapao.FallbackWith(tapao.JSON))
 	if err != nil {
 		logrus.WithField("data", string(data)).Error(err)
 	}
