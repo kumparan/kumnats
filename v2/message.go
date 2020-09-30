@@ -1,6 +1,8 @@
 package kumnats
 
 import (
+	"time"
+
 	"github.com/kumparan/tapao"
 	"github.com/sirupsen/logrus"
 )
@@ -35,6 +37,17 @@ type (
 		NatsMessage
 		OldData string `json:"old_data,omitempty"`
 	}
+
+	// AuditLogMessage :nodoc:
+	AuditLogMessage struct {
+		ServiceName    string    `json:"service_name"`
+		UserID         int64     `json:"user_id"`
+		AuditableType  string    `json:"auditable_type"`
+		AuditableID    string    `json:"auditable_id"`
+		Action         string    `json:"action"`
+		AuditedChanges string    `json:"audited_changes"`
+		CreatedAt      time.Time `json:"created_at"`
+	}
 )
 
 // ParseFromBytes implementation of NatsMessage
@@ -49,6 +62,15 @@ func (m *NatsMessage) ParseFromBytes(data []byte) (err error) {
 // ParseFromBytes implementation of NatsMessageWithOldData
 func (n *NatsMessageWithOldData) ParseFromBytes(data []byte) (err error) {
 	err = tapao.Unmarshal(data, &n, tapao.FallbackWith(tapao.JSON))
+	if err != nil {
+		logrus.WithField("data", string(data)).Error(err)
+	}
+	return
+}
+
+// ParseFromBytes implementation of AuditLogMessage
+func (m *AuditLogMessage) ParseFromBytes(data []byte) (err error) {
+	err = tapao.Unmarshal(data, &m, tapao.FallbackWith(tapao.JSON))
 	if err != nil {
 		logrus.WithField("data", string(data)).Error(err)
 	}
