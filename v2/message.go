@@ -46,6 +46,8 @@ type (
 		AuditableID    string    `json:"auditable_id"`
 		Action         string    `json:"action"`
 		AuditedChanges string    `json:"audited_changes"`
+		OldData        string    `json:"old_data,omitempty"`
+		NewData        string    `json:"new_data,omitempty"`
 		CreatedAt      time.Time `json:"created_at"`
 	}
 )
