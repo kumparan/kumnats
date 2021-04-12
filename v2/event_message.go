@@ -106,7 +106,8 @@ func (n *NatsEventMessage) WithEvent(e *NatsEvent) *NatsEventMessage {
 		n.wrapError(errors.New("empty id"))
 		return n
 	}
-	if e.GetUserID() <= 0 {
+
+	if e.GetUserID() == 0 {
 		n.wrapError(errors.New("empty user id"))
 		return n
 	}
