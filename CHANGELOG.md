@@ -1,7 +1,26 @@
 # kumnats
 
+<a name="v2.8.2"></a>
+## [v2.8.2] - 2021-04-12
+### Code Improvements
+- allow userid below 0
+
+
+<a name="v2.8.1"></a>
+## [v2.8.1] - 2020-10-27
+### New Features
+- add new data and old data in AuditLogMessage
+
+
+<a name="v2.8.0"></a>
+## [v2.8.0] - 2020-09-30
+### New Features
+- add implementation of ParseFromBytes for AuditLogMessage
+- create new message struct for audit log
+
+
 <a name="v2.7.0"></a>
-## [v2.7.0] - 2020-08-25
+## [v2.7.0] - 2020-09-21
 ### New Features
 - create event message builder
 
@@ -67,7 +86,10 @@
 <a name="v1.0.0"></a>
 ## v1.0.0 - 2019-04-04
 
-[Unreleased]: https://github.com/kumparan/kumnats/compare/v2.7.0...HEAD
+[Unreleased]: https://github.com/kumparan/kumnats/compare/v2.8.2...HEAD
+[v2.8.2]: https://github.com/kumparan/kumnats/compare/v2.8.1...v2.8.2
+[v2.8.1]: https://github.com/kumparan/kumnats/compare/v2.8.0...v2.8.1
+[v2.8.0]: https://github.com/kumparan/kumnats/compare/v2.7.0...v2.8.0
 [v2.7.0]: https://github.com/kumparan/kumnats/compare/v2.6.0...v2.7.0
 [v2.6.0]: https://github.com/kumparan/kumnats/compare/v2.5.0...v2.6.0
 [v2.5.0]: https://github.com/kumparan/kumnats/compare/v2.4.1...v2.5.0
